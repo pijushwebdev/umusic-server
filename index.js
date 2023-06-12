@@ -53,6 +53,7 @@ async function run() {
 
     const usersCollection = client.db("umusicDb").collection("users");
     const classCollection = client.db("umusicDb").collection("classes");
+    const cartCollection = client.db("umusicDb").collection("carts");
 
     //get all users from mongoDb and send to client
     app.get('/users', verifyJWT, async (req, res) => {
@@ -60,13 +61,13 @@ async function run() {
       res.send(result);
     })
 
-    //get all classes info
+    //get all classes info for admin manageClasses // admin
     app.get('/allClasses', async (req, res) => {
       const result = await classCollection.find().toArray()
       res.send(result);
     })
 
-    //create user send to mongoDb and get from client
+    //create user send to mongoDb and get from client //signup page // new user
     app.post('/users', async (req, res) => {
       const user = req.body;
       //for google signIn // existing user find
@@ -79,7 +80,7 @@ async function run() {
       res.send(result);
     })
 
-    //add class by instructor // send to mongoDb and get from client
+    //add class by instructor // send to mongoDb and get from client // addClass by instructor
     app.post('/addClassByIns', async (req, res) => {
       const classData = req.body;
       classData.status = 'pending';   
@@ -87,7 +88,7 @@ async function run() {
       res.send(result);
     })
 
-    // update user  to admin
+    // update user  to admin //manageUser by admin
     app.patch('/users/admin/:id', async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -101,7 +102,7 @@ async function run() {
       res.send(result);
 
     })
-    //update user to instructor
+    //update user to instructor // manageUser by admin
     app.patch('/users/instructor/:id', async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -115,13 +116,13 @@ async function run() {
       res.send(result);
 
     })
-    //allow a class
+    //approve a class
     app.patch('/classAllow/:id', async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const updateDoc = {
         $set: {
-          status: 'allowed'
+          status: 'approved'
         },
       };
 
@@ -194,11 +195,57 @@ async function run() {
 
     })
 
+    // all instructors for all
+    app.get('/instructors', async (req,res) => {
+      const query = { role: 'instructor' };
+      const result = await usersCollection.find(query).toArray();
+      res.send(result)
+    })
+    
+    //get all approver class for all
+    app.get('/approvedClasses', async (req,res) => {
+      const query = { status: 'approved'};
+      const result = await classCollection.find(query).toArray();
+      res.send(result);
+    })
+
     //jwt
     app.post('/jwt', (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
       res.send({ token })
+    })
+
+     // cart collection apis
+     app.get('/carts', verifyJWT, async (req, res) => {
+      const email = req.query.email;
+      // console.log(email);
+      if (!email) {
+        res.send([]);
+      }
+      const decodedEmail = req.decoded.email;
+
+      if (email !== decodedEmail) {
+        return res.status(403).send({ error: true, message: 'forbidden access' })
+      }
+      const query = { email: email }
+      const result = await cartCollection.find(query).toArray()
+      res.send(result);
+    })
+
+    app.post('/carts', async (req, res) => {
+      const item = req.body;
+      const result = await cartCollection.insertOne(item);
+      res.send(result);
+
+    })
+
+    //delete a cart by email
+    app.delete('/carts/:id', async (req,res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await cartCollection.deleteOne(query);
+      res.send(result);
     })
 
 
