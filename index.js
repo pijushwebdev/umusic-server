@@ -5,6 +5,8 @@ require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
+//PAYMENTS
+const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY);
 
 const port = process.env.PORT || 5000;
 
@@ -54,6 +56,7 @@ async function run() {
     const usersCollection = client.db("umusicDb").collection("users");
     const classCollection = client.db("umusicDb").collection("classes");
     const cartCollection = client.db("umusicDb").collection("carts");
+    const paymentCollection = client.db("umusicDb").collection("payments");
 
     //get all users from mongoDb and send to client
     app.get('/users', verifyJWT, async (req, res) => {
@@ -83,7 +86,7 @@ async function run() {
     //add class by instructor // send to mongoDb and get from client // addClass by instructor
     app.post('/addClassByIns', async (req, res) => {
       const classData = req.body;
-      classData.status = 'pending';   
+      classData.status = 'pending';
       const result = await classCollection.insertOne(classData);
       res.send(result);
     })
@@ -147,16 +150,16 @@ async function run() {
     })
 
     //send feedback to mongodb
-    app.patch('/feedback/:id', async (req,res) => {
+    app.patch('/feedback/:id', async (req, res) => {
       const id = req.params.id;
       const doc = req.body;
-      const filter = { _id: new ObjectId(id)}
+      const filter = { _id: new ObjectId(id) }
       const updateDoc = {
         $set: {
           feedback: doc.feedback
         }
       }
-      const result = await classCollection.updateOne(filter,updateDoc);
+      const result = await classCollection.updateOne(filter, updateDoc);
       res.send(result)
     })
 
@@ -196,15 +199,15 @@ async function run() {
     })
 
     // all instructors for all
-    app.get('/instructors', async (req,res) => {
+    app.get('/instructors', async (req, res) => {
       const query = { role: 'instructor' };
       const result = await usersCollection.find(query).toArray();
       res.send(result)
     })
-    
+
     //get all approver class for all
-    app.get('/approvedClasses', async (req,res) => {
-      const query = { status: 'approved'};
+    app.get('/approvedClasses', async (req, res) => {
+      const query = { status: 'approved' };
       const result = await classCollection.find(query).toArray();
       res.send(result);
     })
@@ -216,8 +219,8 @@ async function run() {
       res.send({ token })
     })
 
-     // cart collection apis
-     app.get('/carts', verifyJWT, async (req, res) => {
+    // cart collection apis
+    app.get('/carts', verifyJWT, async (req, res) => {
       const email = req.query.email;
       // console.log(email);
       if (!email) {
@@ -241,12 +244,81 @@ async function run() {
     })
 
     //delete a cart by email
-    app.delete('/carts/:id', async (req,res) => {
+    app.delete('/carts/:id', async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)};
+      const query = { _id: new ObjectId(id) };
       const result = await cartCollection.deleteOne(query);
       res.send(result);
     })
+
+    //payment 
+    app.post('/create-payment-intent', verifyJWT, async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: 'usd',
+        payment_method_types: ['card']
+      });
+      res.send({ clientSecret: paymentIntent.client_secret });
+
+    })
+
+    //store payment info / update seats / delete cart items
+    app.post('/payment', verifyJWT, async (req, res) => {
+      const payment = req.body;
+      // console.log(payment);
+      const insertResult = await paymentCollection.insertOne(payment);
+      const id = payment.cartId;
+      const classId = payment.classId;
+
+      const query = { _id: new ObjectId(id) }; // selected class / cart id
+      const cQuery = { _id: new ObjectId(classId) } // class id
+
+      const updateClass = await classCollection.updateOne(cQuery, { $inc: { seats: -1 } })
+
+      const deleteResult = await cartCollection.deleteOne(query);
+
+      res.send({ insertResult, deleteResult, updateClass });
+    })
+
+    //get enrolled class from payment collection by student
+    app.get('/enrolledClass',verifyJWT, async (req, res) => {
+      const email = req.query.email;
+      const query = { email: email }
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    })
+
+    app.get('/paymentHistory',verifyJWT, async (req, res) => {
+      const email = req.query.email;
+      const query = { email: email }
+      const options = {
+        // sort returned documents in descending order by date
+        sort: { date: -1 },
+        // Include only the `title` and `imdb` fields in each returned document
+        projection: { transactionId: 1, className: 1, price: 1, date: 1 },
+      };
+      const result = await paymentCollection.find(query, options).toArray();
+      res.send(result);
+    })
+
+    //get all instructor class by email for instructor dashboard
+    app.get('/instClasses',verifyJWT, async (req,res) => {
+      const email = req.query.email;
+      const query = {email: email};
+      const result = await classCollection.find(query).toArray();
+      res.send(result)
+    })
+
+    app.get('/instEnrollClass', verifyJWT, async (req,res) => {
+      const email = req.query.email;
+      const query = { instructorEmail: email}
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    } )
+
+
 
 
     // Send a ping to confirm a successful connection
