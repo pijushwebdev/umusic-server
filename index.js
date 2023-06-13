@@ -58,14 +58,38 @@ async function run() {
     const cartCollection = client.db("umusicDb").collection("carts");
     const paymentCollection = client.db("umusicDb").collection("payments");
 
+    //verify admin middleware
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+
+      if (user?.role !== 'admin') {
+        return res.status(403).send({ error: true, message: 'forbidden access' })
+      }
+      next();
+    }
+
+    //instructor middleware
+    const verifyInstructor = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+
+      if (user?.role !== 'instructor') {
+        return res.status(403).send({ error: true, message: 'forbidden access' })
+      }
+      next();
+    }
+
     //get all users from mongoDb and send to client
-    app.get('/users', verifyJWT, async (req, res) => {
+    app.get('/users', verifyJWT, verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     })
 
     //get all classes info for admin manageClasses // admin
-    app.get('/allClasses', async (req, res) => {
+    app.get('/allClasses', verifyJWT, verifyAdmin, async (req, res) => {
       const result = await classCollection.find().toArray()
       res.send(result);
     })
@@ -84,7 +108,7 @@ async function run() {
     })
 
     //add class by instructor // send to mongoDb and get from client // addClass by instructor
-    app.post('/addClassByIns', async (req, res) => {
+    app.post('/addClassByIns', verifyJWT, verifyInstructor, async (req, res) => {
       const classData = req.body;
       classData.status = 'pending';
       const result = await classCollection.insertOne(classData);
@@ -283,14 +307,14 @@ async function run() {
     })
 
     //get enrolled class from payment collection by student
-    app.get('/enrolledClass',verifyJWT, async (req, res) => {
+    app.get('/enrolledClass', verifyJWT, async (req, res) => {
       const email = req.query.email;
       const query = { email: email }
       const result = await paymentCollection.find(query).toArray();
       res.send(result);
     })
 
-    app.get('/paymentHistory',verifyJWT, async (req, res) => {
+    app.get('/paymentHistory', verifyJWT, async (req, res) => {
       const email = req.query.email;
       const query = { email: email }
       const options = {
@@ -304,19 +328,23 @@ async function run() {
     })
 
     //get all instructor class by email for instructor dashboard
-    app.get('/instClasses',verifyJWT, async (req,res) => {
+    app.get('/instClasses', verifyJWT, verifyInstructor, async (req, res) => {
       const email = req.query.email;
-      const query = {email: email};
+      const query = { email: email };
       const result = await classCollection.find(query).toArray();
       res.send(result)
     })
 
-    app.get('/instEnrollClass', verifyJWT, async (req,res) => {
+    app.get('/instEnrollClass', verifyJWT, verifyInstructor, async (req, res) => {
       const email = req.query.email;
-      const query = { instructorEmail: email}
+      const query = { instructorEmail: email }
       const result = await paymentCollection.find(query).toArray();
       res.send(result);
-    } )
+    })
+
+    app.get( '/topClasses', async() => {
+      
+    })
 
 
 
