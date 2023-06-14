@@ -342,9 +342,47 @@ async function run() {
       res.send(result);
     })
 
-    app.get( '/topClasses', async() => {
-      
+    // top classes based on enrolled student
+    app.get('/topClasses', async (req, res) => {
+      const pc = await paymentCollection.find().toArray();
+
+      const enrollmentCounts = {};
+
+      // Count the number of students enrolled for each classId
+      pc.forEach((obj) => {
+        const classId = obj.classId;
+        if (enrollmentCounts[classId]) {
+          enrollmentCounts[classId]++;
+        } else {
+          enrollmentCounts[classId] = 1;
+        }
+      });
+
+      // Create an array of objects with classId and count properties
+      const enrollmentArray = Object.entries(enrollmentCounts).map(([classId, count]) => ({ classId, count }));
+
+      // Sort the array based on the count in descending order
+      enrollmentArray.sort((a, b) => b.count - a.count);
+
+      // pc.sort((a, b) => enrollmentCounts[b.classId] - enrollmentCounts[a.classId]);
+
+      const sortedObjects = [];
+      const uniqueClassIds = new Set();
+      let count = 0;
+      enrollmentArray.forEach((enrollment) => {
+        if (count >= 6) return; // Exit loop once 6 classes have been added
+        const { classId } = enrollment;
+        if (!uniqueClassIds.has(classId)) {
+          const object = pc.find((obj) => obj.classId === classId);
+          sortedObjects.push(object);
+          uniqueClassIds.add(classId);
+          count++;
+        }
+      });
+      res.send(sortedObjects)
     })
+
+    
 
 
 
