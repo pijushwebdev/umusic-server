@@ -382,7 +382,11 @@ async function run() {
       res.send(sortedObjects)
     })
 
-    
+    app.get('/topInstructor', async (req, res) => {
+      const query = { role: 'instructor' };
+      const result = await usersCollection.find(query).limit(6).toArray();
+      res.send(result);
+    })
 
 
 
