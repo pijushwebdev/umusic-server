@@ -339,6 +339,50 @@ async function run() {
       res.send(result);
     })
 
+    // specific class total enrolled class
+    app.get('/enrollSpecificClass', async (req,res) => {
+      const email = req.query.email;
+      const query = {instructorEmail: email};
+    
+      const pc = await paymentCollection.find(query).toArray();
+  
+      const enrollmentCounts = {};
+      pc.forEach((obj) => {
+        const classId = obj.classId;
+        if (enrollmentCounts[classId]) {
+          enrollmentCounts[classId]++;
+        } else {
+          enrollmentCounts[classId] = 1;
+        }
+      });
+
+      // Create an array of objects with classId and count properties
+      const enrollmentArray = Object.entries(enrollmentCounts).map(([classId, count]) => ({ classId, count }));
+      
+      res.send( enrollmentArray);
+    })
+
+    //update class info by instructor
+    app.put('/updateFeedback', async (req,res) => {
+      const id = req.query.id;
+      const filter = { _id: new ObjectId(id)};
+      const options = { upsert: true};
+      const updatedClass = req.body;
+      const data = {
+        $set: {
+          className: updatedClass.className,
+          seats: updatedClass.seats,
+          price: updatedClass.price,
+          status: 'pending',
+        },
+        $unset: {
+          feedback: 1 // Remove the feedback field
+        }
+      }
+      const result = await classCollection.updateOne(filter, data, options);
+      res.send(result);
+    })
+
     // top classes based on enrolled student
     app.get('/topClasses', async (req, res) => {
       const pc = await paymentCollection.find().toArray();
@@ -360,7 +404,6 @@ async function run() {
 
       // Sort the array based on the count in descending order
       enrollmentArray.sort((a, b) => b.count - a.count);
-
       // pc.sort((a, b) => enrollmentCounts[b.classId] - enrollmentCounts[a.classId]);
 
       const sortedObjects = [];
@@ -379,14 +422,12 @@ async function run() {
       res.send(sortedObjects)
     })
 
+
     app.get('/topInstructor', async (req, res) => {
       const query = { role: 'instructor' };
       const result = await usersCollection.find(query).limit(6).toArray();
       res.send(result);
     })
-
-
-
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
