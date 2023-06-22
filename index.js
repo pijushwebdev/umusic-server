@@ -85,6 +85,13 @@ async function run() {
       res.send(result);
     })
 
+    //jwt
+    app.post('/jwt', (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+      res.send({ token })
+    })
+
     //get all classes info for admin manageClasses // admin
     app.get('/allClasses', verifyJWT, verifyAdmin, async (req, res) => {
       const result = await classCollection.find().toArray()
@@ -231,14 +238,7 @@ async function run() {
       const query = { status: 'approved' };
       const result = await classCollection.find(query).toArray();
       res.send(result);
-    })
-
-    //jwt
-    app.post('/jwt', (req, res) => {
-      const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
-      res.send({ token })
-    })
+    })  
 
     // cart collection apis
     app.get('/carts', verifyJWT, async (req, res) => {
@@ -261,7 +261,6 @@ async function run() {
       const item = req.body;
       const result = await cartCollection.insertOne(item);
       res.send(result);
-
     })
 
     //delete a cart by email
@@ -362,26 +361,7 @@ async function run() {
       res.send( enrollmentArray);
     })
 
-    //update class info by instructor
-    app.put('/updateFeedback', async (req,res) => {
-      const id = req.query.id;
-      const filter = { _id: new ObjectId(id)};
-      const options = { upsert: true};
-      const updatedClass = req.body;
-      const data = {
-        $set: {
-          className: updatedClass.className,
-          seats: updatedClass.seats,
-          price: updatedClass.price,
-          status: 'pending',
-        },
-        $unset: {
-          feedback: 1 // Remove the feedback field
-        }
-      }
-      const result = await classCollection.updateOne(filter, data, options);
-      res.send(result);
-    })
+    
 
     // top classes based on enrolled student
     app.get('/topClasses', async (req, res) => {
@@ -422,7 +402,28 @@ async function run() {
       res.send(sortedObjects)
     })
 
+    //update class info by instructor
+    app.put('/updateFeedback', async (req,res) => {
+      const id = req.query.id;
+      const filter = { _id: new ObjectId(id)};
+      const options = { upsert: true};
+      const updatedClass = req.body;
+      const data = {
+        $set: {
+          className: updatedClass.className,
+          seats: updatedClass.seats,
+          price: updatedClass.price,
+          status: 'pending',
+        },
+        $unset: {
+          feedback: 1 // Remove the feedback field
+        }
+      }
+      const result = await classCollection.updateOne(filter, data, options);
+      res.send(result);
+    })
 
+    // FOR instructor for homepage
     app.get('/topInstructor', async (req, res) => {
       const query = { role: 'instructor' };
       const result = await usersCollection.find(query).limit(6).toArray();
